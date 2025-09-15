@@ -17,9 +17,9 @@
     @if (empty($location))
         @php
             $browserData = getIpInfos();
-            $browserData['countryName'];
-            $location = $browserData['countryCode'];
-            $currency = $browserData['currencyCode'];
+            $browserData['countryName'] ?? 'NA';
+            $location = $browserData['countryCode'] ?? 'NA';
+            $currency = $browserData['currencyCode'] ?? 'NA';
             //dd($currency);
         @endphp
     @endif
