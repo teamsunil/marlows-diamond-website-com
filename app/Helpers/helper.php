@@ -1457,41 +1457,88 @@ if (!function_exists("getIpInfos")) {
     /**
      * details browser currency
      */
-    function getIpInfos()
+    // function getIpInfos()
+    // {
+    //     // $countryName = 'China';
+    //     // $countryCode = 'CN';
+    //     // $currencyCode = 'Chinese yuan';
+
+    //     $location = Session::get('location');
+    //     $currency = Session::get('currency');
+    //     // dd($location,$currency);
+    //     if (isset($location) && !empty($location)) {
+    //         // dump(" getIpInfos if");
+    //         $getCountryName = Country::where('shortname', $location)->select('name', 'shortname', 'currency', 'language_code', 'phonecode')->first();
+    //         $countryName = $getCountryName->name;
+    //         $countryCode = $location;
+    //         $currencyCode = isset($currency) ? $currency : $getCountryName->currency;
+    //     } else {
+    //         // dump(" getIpInfos else");
+    //         // $ipaddress = getenv("REMOTE_ADDR");
+    //         $ipaddress = $_SERVER['REMOTE_ADDR'];
+    //         $geo  = unserialize(file_get_contents("http://www.geoplugin.net/php.gp?ip=$ipaddress"));
+
+    //         $countryName = $geo["geoplugin_countryName"];
+    //         $countryCode = $geo["geoplugin_countryCode"];
+    //         $currencyCode = $geo["geoplugin_currencyCode"];
+    //         Session::put('location', $countryCode);
+    //         Session::put('currency', $currencyCode);
+    //         Session::put('country', $geo["geoplugin_countryName"]);
+    //         Session::put('language', 'EN');
+    //     }
+
+    //     $ipinformation = array(
+    //         "countryName" => $countryName,
+    //         "countryCode" => $countryCode,
+    //         "currencyCode" => $currencyCode
+    //     );
+
+    //     return $ipinformation;
+    // }
+    function getIpInfos($ip = NULL, $purpose = "location", $deep_detect = TRUE)
     {
-        // $countryName = 'China';
-        // $countryCode = 'CN';
-        // $currencyCode = 'Chinese yuan';
+        $output = NULL;
 
-        $location = Session::get('location');
-        $currency = Session::get('currency');
-        if(isset($location) && !empty($location)){
-            // dump(" getIpInfos if");
-            $getCountryName = Country::where('shortname',$location)->select('name','shortname','currency','language_code','phonecode')->first();
-            $countryName = $getCountryName->name;
-            $countryCode = $location;
-            $currencyCode = isset($currency)?$currency:$getCountryName->currency;
-        }else{
-            // dump(" getIpInfos else");
-            $ipaddress = getenv("REMOTE_ADDR");
-            $geo  = unserialize(file_get_contents("http://www.geoplugin.net/php.gp?ip=$ipaddress"));
-
-            $countryName = $geo["geoplugin_countryName"];
-            $countryCode = $geo["geoplugin_countryCode"];
-            $currencyCode = $geo["geoplugin_currencyCode"];
-            Session::put('location', $countryCode);
-            Session::put('currency', $currencyCode);
-            Session::put('country', $geo["geoplugin_countryName"]);
-            Session::put('language', 'EN');
+        if (filter_var($ip, FILTER_VALIDATE_IP) === FALSE) {
+            $ip = $_SERVER["REMOTE_ADDR"];
+            if ($deep_detect) {
+                if (filter_var(@$_SERVER['HTTP_X_FORWARDED_FOR'], FILTER_VALIDATE_IP))
+                    $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
+                if (filter_var(@$_SERVER['HTTP_CLIENT_IP'], FILTER_VALIDATE_IP))
+                    $ip = $_SERVER['HTTP_CLIENT_IP'];
+            }
         }
 
-        $ipinformation = array(
-            "countryName" => $countryName,
-            "countryCode" => $countryCode,
-            "currencyCode" => $currencyCode
+        $purpose    = str_replace(array("name", "\n", "\t", " ", "-", "_"), NULL, strtolower(trim($purpose)));
+        $support    = array("country", "countrycode", "state", "region", "city", "location", "address");
+        $continents = array(
+            "AF" => "Africa",
+            "AN" => "Antarctica",
+            "AS" => "Asia",
+            "EU" => "Europe",
+            "OC" => "Australia (Oceania)",
+            "NA" => "North America",
+            "SA" => "South America"
         );
-
-        return $ipinformation;
+        // dd(filter_var($ip, FILTER_VALIDATE_IP) && in_array($purpose, $support));
+        // dd($ip);
+        if (filter_var($ip, FILTER_VALIDATE_IP) && in_array($purpose, $support)) {
+            // $ipdat = @json_decode(file_get_contents("https://api.geoplugin.com/?ip=" . $ip . "&auth=" . env('GEO_LOCATION_KEY', 'abbe5fd8-dd34-467f-a741-26f8355e6b74')));
+            // $ipdat = @json_decode(file_get_contents("http://www.geoplugin.net/json.gp?ip=" . $ip));
+            // dd(file_get_contents("https://api.geoplugin.com/?ip=" . $ip . "&auth=" . env('GEO_LOCATION_KEY', 'abbe5fd8-dd34-467f-a741-26f8355e6b74')));
+            if (@strlen(trim($ipdat->geoplugin_countryCode)) == 2) {
+                $output = array(
+                    "city"           => @$ipdat->geoplugin_city,
+                    "state"          => @$ipdat->geoplugin_regionName,
+                    "country"        => @$ipdat->geoplugin_countryName,
+                    "country_code"   => @$ipdat->geoplugin_countryCode,
+                    "continent"      => @$continents[strtoupper($ipdat->geoplugin_continentCode)],
+                    "continent_code" => @$ipdat->geoplugin_continentCode,
+                    "ip" => $ip
+                );
+            }
+        }
+        return $output;
     }
 }
 
@@ -1507,6 +1554,7 @@ if (!function_exists("currencySymbol")) {
             $currency = $currencySymbol; 
         }else{
             $currency = session()->get('currency', []);
+            $currency = 'GBP';
         }
         $browserData = getIpInfos();
 
@@ -1516,8 +1564,7 @@ if (!function_exists("currencySymbol")) {
         }
         // dd($currency);
 
-        $currencySymbel = DB::table('currency')->select('currency_sign','base_price')->where('currency_name', $currency)->first();
-
+        $currencySymbel = DB::table('currency')->select('currency_sign', 'base_price')->where('currency_name','=', !empty($currency) ? $currency: 'GBP')->first();
 
         $getSymbel = array(
             "MY_CURRENCY_SYMBOL" => $currencySymbel->currency_sign,
@@ -2219,4 +2266,62 @@ if (!function_exists("checkDiamondLabValue")) {
         }
         return false;
     }
+}
+
+if (!function_exists("getImageOptimizeDetails")) {
+    function getImageOptimizeDetails($imageUrl, $width, $height)
+    {
+        try {
+
+            $path_parts = pathinfo($imageUrl);
+
+            $filename = 'tempfolderpath/' . $path_parts['basename'];
+
+            if (file_exists($filename)) {
+                $imageUrl = asset('tempfolderpath/' . $path_parts['basename']);
+            } else {
+                // Image manipulation
+                $img = Image::make(env('APPIMAGEURL') . $imageUrl)->resize($width, $height);
+                $tempPath = public_path('tempfolderpath');
+                $tempFile = $tempPath . '/' . $path_parts['basename'];
+                $img->save($tempFile);
+                // Pass the image URL to the view
+                $imageUrl = asset('tempfolderpath/' . $path_parts['basename']);
+            }
+            return $imageUrl;
+        } catch (\Throwable $th) {
+            Log::alert(env('APPIMAGEURL') . $imageUrl);
+            return '#';
+        }
+    }
+    // function getImageOptimizeDetails($imageUrl, $width, $height)
+    // {
+    //     try {
+    //         $path_parts = pathinfo($imageUrl);
+
+    //         $tempPath = public_path('tempfolderpath');
+
+    //         if (!file_exists($tempPath)) {
+    //             mkdir($tempPath, 0777, true);
+    //         }
+
+    //         $filename = $tempPath . '/' . $path_parts['basename'];
+
+    //         if (file_exists($filename)) {
+    //             $imageUrl = asset('tempfolderpath/' . $path_parts['basename']);
+    //         } else {
+    //             // Image manipulation
+    //             $img = Image::make(env('APPIMAGEURL') . $imageUrl)->resize($width, $height);
+    //             $img->save($filename);
+
+    //             $imageUrl = asset('tempfolderpath/' . $path_parts['basename']);
+    //         }
+
+    //         return $imageUrl;
+    //     } catch (\Throwable $th) {
+    //         Log::alert('Image error: ' . env('APPIMAGEURL') . $imageUrl);
+    //         // Log::alert($th->getMessage());
+    //         return '#';
+    //     }
+    // }
 }
